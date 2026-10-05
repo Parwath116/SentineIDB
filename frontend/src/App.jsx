@@ -9,6 +9,7 @@ import ScrollProgress from './components/ScrollProgress';
 import BackToTop from './components/BackToTop';
 import CookieBanner from './components/CookieBanner';
 import ShortcutsModal from './components/ShortcutsModal';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -128,7 +129,9 @@ function MainLayout() {
             path="/"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <ErrorBoundary pageName="Dashboard">
+                  <Dashboard />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -136,7 +139,9 @@ function MainLayout() {
             path="/alerts"
             element={
               <ProtectedRoute>
-                <Alerts />
+                <ErrorBoundary pageName="Live Alerts">
+                  <Alerts />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -144,7 +149,9 @@ function MainLayout() {
             path="/chains"
             element={
               <ProtectedRoute>
-                <AttackChains />
+                <ErrorBoundary pageName="Attack Chains">
+                  <AttackChains />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -152,7 +159,9 @@ function MainLayout() {
             path="/search"
             element={
               <ProtectedRoute>
-                <LogSearch />
+                <ErrorBoundary pageName="Log Search">
+                  <LogSearch />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -160,7 +169,9 @@ function MainLayout() {
             path="/performance"
             element={
               <ProtectedRoute>
-                <Performance />
+                <ErrorBoundary pageName="Performance & Benchmarks">
+                  <Performance />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -168,7 +179,9 @@ function MainLayout() {
             path="/help"
             element={
               <ProtectedRoute>
-                <Help />
+                <ErrorBoundary pageName="Help & Documentation">
+                  <Help />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />

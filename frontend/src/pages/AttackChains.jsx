@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Network } from 'vis-network';
+import { Network, DataSet } from 'vis-network/standalone';
 import { apiFetch } from '../api';
 import { useTheme } from '../context/ThemeContext';
 import { GraphSkeleton } from '../components/Skeleton';
@@ -9,6 +9,8 @@ export default function AttackChains() {
   const { theme } = useTheme();
   const graphContainerRef = useRef(null);
   const networkInstanceRef = useRef(null);
+  const nodesDataSetRef = useRef(null);
+  const edgesDataSetRef = useRef(null);
 
   const [origins, setOrigins] = useState([]);
   const [selectedHost, setSelectedHost] = useState('');
@@ -20,11 +22,24 @@ export default function AttackChains() {
 
   const isDark = theme === 'dark';
 
+  // Cleanup network on unmount (e.g. tab switch or route change)
+  useEffect(() => {
+    return () => {
+      if (networkInstanceRef.current) {
+        networkInstanceRef.current.destroy();
+        networkInstanceRef.current = null;
+      }
+      nodesDataSetRef.current = null;
+      edgesDataSetRef.current = null;
+    };
+  }, []);
+
   // Load origins on mount
   useEffect(() => {
     async function loadOrigins() {
       try {
         setLoading(true);
+        setError(null);
         const res = await apiFetch('/api/chains/origins');
         const list = res.data || [];
         setOrigins(list);
@@ -32,10 +47,11 @@ export default function AttackChains() {
           // Default to first flagged origin (compromised workstation)
           const flagged = list.find((c) => c.flagged) || list[0];
           setSelectedHost(flagged.host);
+        } else {
+          setLoading(false);
         }
       } catch (err) {
         setError(err.message);
-      } finally {
         setLoading(false);
       }
     }
@@ -48,6 +64,7 @@ export default function AttackChains() {
     async function fetchTrace() {
       try {
         setLoading(true);
+        setError(null);
         const res = await apiFetch(`/api/chains/trace?host=${encodeURIComponent(selectedHost)}`);
         setTraceData(res.data);
         setPipelineMeta({ pipeline: res.pipeline, collection: res.collection });
@@ -63,9 +80,13 @@ export default function AttackChains() {
 
   // Render vis-network graph
   useEffect(() => {
-    if (!traceData || !graphContainerRef.current) return;
+    if (loading || !traceData || !graphContainerRef.current) return;
 
-    const { nodes: rawNodes, links: rawLinks, origin } = traceData;
+    const rawNodes = traceData.nodes || [];
+    const rawLinks = traceData.links || [];
+    const origin = traceData.origin;
+
+    if (rawNodes.length === 0) return;
 
     // Subnet color map
     const subnetColors = {
@@ -77,7 +98,11 @@ export default function AttackChains() {
 
     const visNodes = rawNodes.map((n) => {
       const isOrigin = n.id === origin;
-      const themeColors = subnetColors[n.subnet] || { bg: '#64748b', border: '#94a3b8', text: '#ffffff' };
+      const themeColors = subnetColors[n.subnet] || {
+        bg: isDark ? '#334155' : '#cbd5e1',
+        border: isDark ? '#64748b' : '#94a3b8',
+        text: isDark ? '#f8fafc' : '#1e293b',
+      };
       return {
         id: n.id,
         label: `${n.id}\n(${n.subnet || 'host'})`,
@@ -118,7 +143,7 @@ export default function AttackChains() {
       id: `edge-${idx}`,
       from: l.source,
       to: l.target,
-      label: `${l.protocol.toUpperCase()} (Hop ${l.hop})`,
+      label: `${(l.protocol || '').toUpperCase()} (Hop ${l.hop})`,
       arrows: 'to',
       font: {
         align: 'middle',
@@ -136,7 +161,17 @@ export default function AttackChains() {
       smooth: { type: 'cubicBezier', roundness: 0.2 },
     }));
 
-    const data = { nodes: visNodes, edges: visEdges };
+    if (networkInstanceRef.current) {
+      networkInstanceRef.current.destroy();
+      networkInstanceRef.current = null;
+    }
+
+    const nodesDataSet = new DataSet(visNodes);
+    const edgesDataSet = new DataSet(visEdges);
+    nodesDataSetRef.current = nodesDataSet;
+    edgesDataSetRef.current = edgesDataSet;
+
+    const data = { nodes: nodesDataSet, edges: edgesDataSet };
     const options = {
       physics: {
         solver: 'forceAtlas2Based',
@@ -156,10 +191,6 @@ export default function AttackChains() {
       },
     };
 
-    if (networkInstanceRef.current) {
-      networkInstanceRef.current.destroy();
-    }
-
     const net = new Network(graphContainerRef.current, data, options);
     networkInstanceRef.current = net;
 
@@ -170,18 +201,17 @@ export default function AttackChains() {
       if (match) setSelectedNode(match);
     });
 
-    // Hover effect: highlight neighbors
+    // Hover effect: highlight neighbors using DataSet.update
     net.on('hoverNode', (params) => {
       const hoveredId = params.node;
       const connectedNodes = net.getConnectedNodes(hoveredId);
-      const allToHighlight = [hoveredId, ...connectedNodes];
+      const allToHighlight = new Set([hoveredId, ...connectedNodes]);
 
-      // Update node styles for neighbor glow
       const updateArray = visNodes.map((n) => ({
         id: n.id,
-        opacity: allToHighlight.includes(n.id) ? 1.0 : 0.25,
+        opacity: allToHighlight.has(n.id) ? 1.0 : 0.25,
       }));
-      net.body.data.nodes.update(updateArray);
+      nodesDataSetRef.current?.update(updateArray);
     });
 
     net.on('blurNode', () => {
@@ -189,7 +219,7 @@ export default function AttackChains() {
         id: n.id,
         opacity: 1.0,
       }));
-      net.body.data.nodes.update(resetArray);
+      nodesDataSetRef.current?.update(resetArray);
     });
 
     return () => {
@@ -198,7 +228,10 @@ export default function AttackChains() {
         networkInstanceRef.current = null;
       }
     };
-  }, [traceData, isDark]);
+  }, [traceData, isDark, loading]);
+
+  const hasOrigins = origins && origins.length > 0;
+  const hasNodes = traceData?.nodes && traceData.nodes.length > 0;
 
   return (
     <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px 20px', minHeight: 'calc(100vh - 120px)' }}>
@@ -214,31 +247,33 @@ export default function AttackChains() {
         </div>
 
         {/* Origin Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Attack Origin:
-          </label>
-          <select
-            value={selectedHost}
-            onChange={(e) => setSelectedHost(e.target.value)}
-            style={{
-              padding: '7px 12px',
-              borderRadius: '6px',
-              border: '1px solid var(--border)',
-              backgroundColor: 'var(--bg-surface-raised)',
-              color: 'var(--text-primary)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
-              fontWeight: 600,
-            }}
-          >
-            {origins.map((o) => (
-              <option key={o.host} value={o.host}>
-                {o.host} ({o.hops} hops{o.flagged ? ' - ATTACK CHAIN' : ''})
-              </option>
-            ))}
-          </select>
-        </div>
+        {hasOrigins && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Attack Origin:
+            </label>
+            <select
+              value={selectedHost}
+              onChange={(e) => setSelectedHost(e.target.value)}
+              style={{
+                padding: '7px 12px',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--bg-surface-raised)',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '13px',
+                fontWeight: 600,
+              }}
+            >
+              {origins.map((o) => (
+                <option key={o.host} value={o.host}>
+                  {o.host} ({o.hops} hops{o.flagged ? ' - ATTACK CHAIN' : ''})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -254,7 +289,7 @@ export default function AttackChains() {
           <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Topology Graph for {selectedHost}
+                {selectedHost ? `Topology Graph for ${selectedHost}` : 'Lateral Attack Graph'}
               </span>
               {traceData?.hops > 0 && (
                 <span
@@ -282,18 +317,67 @@ export default function AttackChains() {
             </div>
           </div>
 
-          {loading ? (
-            <GraphSkeleton />
-          ) : (
+          {/* Loading Skeleton */}
+          {loading && <GraphSkeleton />}
+
+          {/* Empty State: No Origins */}
+          {!loading && !hasOrigins && (
             <div
-              ref={graphContainerRef}
               style={{
-                width: '100%',
                 height: '520px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '40px 20px',
+                textAlign: 'center',
                 backgroundColor: isDark ? '#0b0f19' : '#f8fafc',
               }}
-            />
+            >
+              <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.7 }}>🔍</div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                No Lateral Movement Chains Detected
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '440px', lineHeight: 1.5 }}>
+                There are currently no internal hosts exhibiting recursive multi-hop remote administrative protocol connections (SSH, RDP, SMB, WinRM).
+              </p>
+            </div>
           )}
+
+          {/* Empty State: No Trace Nodes for Selected Host */}
+          {!loading && hasOrigins && !hasNodes && (
+            <div
+              style={{
+                height: '520px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '40px 20px',
+                textAlign: 'center',
+                backgroundColor: isDark ? '#0b0f19' : '#f8fafc',
+              }}
+            >
+              <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.7 }}>🕸</div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                No Graph Topology for {selectedHost}
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '440px', lineHeight: 1.5 }}>
+                No active lateral connection hops were recorded originating from this host within the selected time window.
+              </p>
+            </div>
+          )}
+
+          {/* Active Canvas (Kept in DOM so Ref is always attached) */}
+          <div
+            ref={graphContainerRef}
+            style={{
+              width: '100%',
+              height: '520px',
+              backgroundColor: isDark ? '#0b0f19' : '#f8fafc',
+              display: loading || !hasOrigins || !hasNodes ? 'none' : 'block',
+            }}
+          />
         </div>
 
         {/* Node Detail Drawer / Card */}
