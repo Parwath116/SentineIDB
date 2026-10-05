@@ -1,0 +1,531 @@
+{
+  "generatedAt": "2026-10-05T03:18:29.862152Z",
+  "mongoVersion": "7.0.43",
+  "dataset": {
+    "events": 500068,
+    "raw_logs": 500074,
+    "connections": 43982
+  },
+  "indexComparisons": [
+    {
+      "label": "Events by source IP (time-series)",
+      "collection": "events",
+      "description": "All events from one source IP in the last 7 days.",
+      "index": "srcIp_1_ts_1",
+      "pipeline": [
+        {
+          "$match": {
+            "srcIp": "195.58.217.28",
+            "ts": {
+              "$gte": "2026-09-28T03:18:30.033666Z"
+            }
+          }
+        },
+        {
+          "$group": {
+            "_id": "$eventType",
+            "n": {
+              "$sum": 1
+            }
+          }
+        }
+      ],
+      "without": {
+        "stage": "CLUSTERED_IXSCAN",
+        "index": null,
+        "totalDocsExamined": 24089,
+        "totalKeysExamined": 0,
+        "nReturned": 7139,
+        "executionTimeMillis": 172,
+        "wallClockMillisMin": 157.6,
+        "wallClockMillisMedian": 164.9,
+        "wallClockMillisMax": 191.9
+      },
+      "with": {
+        "stage": "IXSCAN",
+        "index": "srcIp_1_ts_1",
+        "totalDocsExamined": 7139,
+        "totalKeysExamined": 7315,
+        "nReturned": 7139,
+        "executionTimeMillis": 162,
+        "wallClockMillisMin": 188.3,
+        "wallClockMillisMedian": 210.8,
+        "wallClockMillisMax": 231.6
+      },
+      "speedup": 0.8,
+      "note": "Time-series explain counts buckets, not individual events."
+    },
+    {
+      "label": "Failed logins in a window (time-series)",
+      "collection": "events",
+      "description": "auth_fail events in the last 3 days.",
+      "index": "eventType_1_ts_1",
+      "pipeline": [
+        {
+          "$match": {
+            "eventType": "auth_fail",
+            "ts": {
+              "$gte": "2026-10-02T03:18:30.033666Z"
+            }
+          }
+        },
+        {
+          "$group": {
+            "_id": "$srcIp",
+            "n": {
+              "$sum": 1
+            }
+          }
+        },
+        {
+          "$sort": {
+            "n": -1
+          }
+        },
+        {
+          "$limit": 5
+        }
+      ],
+      "without": {
+        "stage": "CLUSTERED_IXSCAN",
+        "index": null,
+        "totalDocsExamined": 9912,
+        "totalKeysExamined": 0,
+        "nReturned": 418,
+        "executionTimeMillis": 15,
+        "wallClockMillisMin": 13.8,
+        "wallClockMillisMedian": 15.1,
+        "wallClockMillisMax": 23.4
+      },
+      "with": {
+        "stage": "IXSCAN",
+        "index": "eventType_1_ts_1",
+        "totalDocsExamined": 418,
+        "totalKeysExamined": 422,
+        "nReturned": 418,
+        "executionTimeMillis": 6,
+        "wallClockMillisMin": 5.9,
+        "wallClockMillisMedian": 6.6,
+        "wallClockMillisMax": 8.4
+      },
+      "speedup": 2.3,
+      "note": "Time-series explain counts buckets, not individual events."
+    },
+    {
+      "label": "Raw logs by source IP",
+      "collection": "raw_logs",
+      "description": "Raw log lines from one IP in the last 7 days, newest first.",
+      "index": "srcIp_1_ts_1",
+      "pipeline": [
+        {
+          "$match": {
+            "srcIp": "195.58.217.28",
+            "ts": {
+              "$gte": "2026-09-28T03:18:30.033666Z"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "ts": -1
+          }
+        },
+        {
+          "$limit": 50
+        }
+      ],
+      "without": {
+        "stage": "IXSCAN",
+        "index": "ts_ttl_14d",
+        "totalDocsExamined": 369640,
+        "totalKeysExamined": 369640,
+        "nReturned": 50,
+        "executionTimeMillis": 675,
+        "wallClockMillisMin": 329.0,
+        "wallClockMillisMedian": 350.7,
+        "wallClockMillisMax": 503.4
+      },
+      "with": {
+        "stage": "IXSCAN",
+        "index": "srcIp_1_ts_1",
+        "totalDocsExamined": 50,
+        "totalKeysExamined": 50,
+        "nReturned": 50,
+        "executionTimeMillis": 2,
+        "wallClockMillisMin": 2.1,
+        "wallClockMillisMedian": 2.3,
+        "wallClockMillisMax": 3.3
+      },
+      "speedup": 152.5,
+      "note": ""
+    },
+    {
+      "label": "Attack-chain traversal ($graphLookup)",
+      "collection": "hosts",
+      "description": "Trace remote-admin chains (maxDepth 5) from every workstation, as the detection sweep does.",
+      "index": "srcHost_1",
+      "pipeline": [
+        {
+          "$match": {
+            "subnet": "workstation"
+          }
+        },
+        {
+          "$graphLookup": {
+            "from": "connections",
+            "startWith": "$hostname",
+            "connectFromField": "dstHost",
+            "connectToField": "srcHost",
+            "as": "chain",
+            "maxDepth": 5,
+            "depthField": "hop",
+            "restrictSearchWithMatch": {
+              "protocol": {
+                "$in": [
+                  "ssh",
+                  "rdp",
+                  "smb",
+                  "winrm"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "$match": {
+            "chain.0": {
+              "$exists": true
+            }
+          }
+        },
+        {
+          "$project": {
+            "hostname": 1,
+            "hops": {
+              "$size": "$chain"
+            }
+          }
+        }
+      ],
+      "without": {
+        "stage": "IXSCAN",
+        "index": "subnet_1",
+        "totalDocsExamined": 70,
+        "totalKeysExamined": 70,
+        "nReturned": 70,
+        "executionTimeMillis": 1289,
+        "wallClockMillisMin": 1109.4,
+        "wallClockMillisMedian": 1231.8,
+        "wallClockMillisMax": 1278.8
+      },
+      "with": {
+        "stage": "IXSCAN",
+        "index": "subnet_1",
+        "totalDocsExamined": 70,
+        "totalKeysExamined": 70,
+        "nReturned": 70,
+        "executionTimeMillis": 33,
+        "wallClockMillisMin": 32.9,
+        "wallClockMillisMedian": 33.8,
+        "wallClockMillisMax": 71.5
+      },
+      "speedup": 36.4,
+      "note": "Each $graphLookup hop is an equality lookup on connections.srcHost; without the index every hop scans the collection. Explain reports only the outer stage on hosts; the wall-clock time shows the real cost."
+    },
+    {
+      "label": "Open alerts (partial index)",
+      "collection": "alerts",
+      "description": "Latest open alerts. Partial index covers only status=open documents.",
+      "index": "open_alerts_ts + status_severity_ts",
+      "pipeline": [
+        {
+          "$match": {
+            "status": "open"
+          }
+        },
+        {
+          "$sort": {
+            "ts": -1
+          }
+        },
+        {
+          "$limit": 50
+        }
+      ],
+      "without": {
+        "stage": "COLLSCAN",
+        "index": null,
+        "totalDocsExamined": 13,
+        "totalKeysExamined": 0,
+        "nReturned": 13,
+        "executionTimeMillis": 0,
+        "wallClockMillisMin": 1.6,
+        "wallClockMillisMedian": 3.5,
+        "wallClockMillisMax": 4.1
+      },
+      "with": {
+        "stage": "IXSCAN",
+        "index": "open_alerts_ts",
+        "totalDocsExamined": 13,
+        "totalKeysExamined": 13,
+        "nReturned": 13,
+        "executionTimeMillis": 1,
+        "wallClockMillisMin": 1.7,
+        "wallClockMillisMedian": 2.3,
+        "wallClockMillisMax": 3.4
+      },
+      "speedup": 1.5,
+      "note": "The alerts collection is small in this deployment, so absolute times are tiny; the plan change is what matters."
+    }
+  ],
+  "timeSeriesVsRegular": {
+    "timeSeries": {
+      "storage": {
+        "count": null,
+        "sizeBytes": 32536057,
+        "storageSizeBytes": 12591104,
+        "totalIndexSizeBytes": 9203712,
+        "avgObjSizeBytes": null,
+        "timeseries": true
+      },
+      "query": {
+        "stage": "CLUSTERED_IXSCAN",
+        "index": null,
+        "totalDocsExamined": 938,
+        "totalKeysExamined": 0,
+        "nReturned": 917,
+        "executionTimeMillis": 10,
+        "wallClockMillisMin": 11.4,
+        "wallClockMillisMedian": 13.6,
+        "wallClockMillisMax": 17.6
+      }
+    },
+    "regular": {
+      "storage": {
+        "count": 500068,
+        "sizeBytes": 117720933,
+        "storageSizeBytes": 26505216,
+        "totalIndexSizeBytes": 41332736,
+        "avgObjSizeBytes": 235,
+        "timeseries": false
+      },
+      "query": {
+        "stage": "IXSCAN",
+        "index": "ts_1",
+        "totalDocsExamined": 11965,
+        "totalKeysExamined": 11965,
+        "nReturned": 11965,
+        "executionTimeMillis": 22,
+        "wallClockMillisMin": 21.7,
+        "wallClockMillisMedian": 24.5,
+        "wallClockMillisMax": 29.4
+      }
+    },
+    "queryDescription": "Count and bytes by eventType for a 6-hour window two days ago.",
+    "pipeline": [
+      {
+        "$match": {
+          "ts": {
+            "$gte": "2026-10-03T03:18:56.023392Z",
+            "$lt": "2026-10-03T09:18:56.023392Z"
+          }
+        }
+      },
+      {
+        "$group": {
+          "_id": "$eventType",
+          "n": {
+            "$sum": 1
+          },
+          "bytes": {
+            "$sum": {
+              "$ifNull": [
+                "$bytesOut",
+                0
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "notes": [
+      "Time-series 'docs examined' counts buckets (many events each); regular counts individual documents.",
+      "Both collections carry equivalent secondary indexes; the time-series collection also keeps its automatic (meta, ts) index.",
+      "Time-series storage is compressed column-wise per bucket; the saving depends on how clustered the data is."
+    ]
+  },
+  "textSearch": [
+    {
+      "term": "rclone",
+      "withIndex": {
+        "method": "$text on message_text index",
+        "stage": "TEXT (IXSCAN)",
+        "index": "message_text",
+        "totalDocsExamined": 2,
+        "totalKeysExamined": 2,
+        "nReturned": 2,
+        "executionTimeMillis": 0,
+        "wallClockMillisMin": 1.3,
+        "wallClockMillisMedian": 1.5,
+        "wallClockMillisMax": 2.0
+      },
+      "withoutIndex": {
+        "method": "case-insensitive $regex (no text index can serve it)",
+        "stage": "COLLSCAN",
+        "index": null,
+        "totalDocsExamined": 500074,
+        "totalKeysExamined": 0,
+        "nReturned": 2,
+        "executionTimeMillis": 353,
+        "wallClockMillisMin": 353.2,
+        "wallClockMillisMedian": 372.3,
+        "wallClockMillisMax": 390.5
+      },
+      "pipelines": {
+        "text": [
+          {
+            "$match": {
+              "$text": {
+                "$search": "rclone"
+              }
+            }
+          },
+          {
+            "$limit": 1000000
+          },
+          {
+            "$count": "hits"
+          }
+        ],
+        "regex": [
+          {
+            "$match": {
+              "message": {
+                "$regex": "rclone",
+                "$options": "i"
+              }
+            }
+          },
+          {
+            "$count": "hits"
+          }
+        ]
+      }
+    },
+    {
+      "term": "psexec",
+      "withIndex": {
+        "method": "$text on message_text index",
+        "stage": "TEXT (IXSCAN)",
+        "index": "message_text",
+        "totalDocsExamined": 2,
+        "totalKeysExamined": 2,
+        "nReturned": 2,
+        "executionTimeMillis": 0,
+        "wallClockMillisMin": 1.4,
+        "wallClockMillisMedian": 2.4,
+        "wallClockMillisMax": 3.5
+      },
+      "withoutIndex": {
+        "method": "case-insensitive $regex (no text index can serve it)",
+        "stage": "COLLSCAN",
+        "index": null,
+        "totalDocsExamined": 500074,
+        "totalKeysExamined": 0,
+        "nReturned": 2,
+        "executionTimeMillis": 360,
+        "wallClockMillisMin": 345.4,
+        "wallClockMillisMedian": 374.5,
+        "wallClockMillisMax": 519.5
+      },
+      "pipelines": {
+        "text": [
+          {
+            "$match": {
+              "$text": {
+                "$search": "psexec"
+              }
+            }
+          },
+          {
+            "$limit": 1000000
+          },
+          {
+            "$count": "hits"
+          }
+        ],
+        "regex": [
+          {
+            "$match": {
+              "message": {
+                "$regex": "psexec",
+                "$options": "i"
+              }
+            }
+          },
+          {
+            "$count": "hits"
+          }
+        ]
+      }
+    },
+    {
+      "term": "\"Failed password\"",
+      "withIndex": {
+        "method": "$text on message_text index",
+        "stage": "TEXT (IXSCAN)",
+        "index": "message_text",
+        "totalDocsExamined": 30399,
+        "totalKeysExamined": 34065,
+        "nReturned": 3666,
+        "executionTimeMillis": 71,
+        "wallClockMillisMin": 83.6,
+        "wallClockMillisMedian": 99.1,
+        "wallClockMillisMax": 136.1
+      },
+      "withoutIndex": {
+        "method": "case-insensitive $regex (no text index can serve it)",
+        "stage": "COLLSCAN",
+        "index": null,
+        "totalDocsExamined": 500074,
+        "totalKeysExamined": 0,
+        "nReturned": 3666,
+        "executionTimeMillis": 343,
+        "wallClockMillisMin": 303.2,
+        "wallClockMillisMedian": 394.5,
+        "wallClockMillisMax": 417.0
+      },
+      "pipelines": {
+        "text": [
+          {
+            "$match": {
+              "$text": {
+                "$search": "\"Failed password\""
+              }
+            }
+          },
+          {
+            "$limit": 1000000
+          },
+          {
+            "$count": "hits"
+          }
+        ],
+        "regex": [
+          {
+            "$match": {
+              "message": {
+                "$regex": "failed password",
+                "$options": "i"
+              }
+            }
+          },
+          {
+            "$count": "hits"
+          }
+        ]
+      }
+    }
+  ],
+  "elapsedSeconds": 36.4
+}

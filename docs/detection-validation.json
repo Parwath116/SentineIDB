@@ -1,0 +1,130 @@
+{
+  "batch": {
+    "brute_force": {
+      "truth": 3,
+      "detected": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "password_spraying": {
+      "truth": 2,
+      "detected": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "port_scan": {
+      "truth": 3,
+      "detected": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "lateral_movement": {
+      "truth": 2,
+      "detected": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "exfiltration": {
+      "truth": 2,
+      "detected": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "overall": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  },
+  "realtime": {
+    "brute_force": {
+      "truth": 3,
+      "detected": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "password_spraying": {
+      "truth": 2,
+      "detected": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "port_scan": {
+      "truth": 3,
+      "detected": 3,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "lateral_movement": {
+      "truth": 2,
+      "detected": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "exfiltration": {
+      "truth": 2,
+      "detected": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "falsePositives": [],
+      "missed": []
+    },
+    "overall": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  }
+}
